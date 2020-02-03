@@ -6,17 +6,24 @@ use uuid::Uuid;
 struct Arena<'a> {
     nodes: HashMap<&'a String, &'a Node>,
     edges: HashMap<&'a String, &'a Edge<'a>>,
-    costs: HashMap<&'a String, &'a u64>,
+    costs: HashMap<&'a String, u64>,
     processed: Vec<&'a Node>,
+    start: &'a Node,
+    end: &'a Node,
 }
 
 impl<'a> Arena<'a> {
-    fn new() -> Arena<'a> {
+    fn new(start: &'a Node, end: &'a Node) -> Arena<'a> {
+        let mut costs = HashMap::new();
+        costs.insert(&start.id, 0);
+        costs.insert(&end.id, std::u64::MAX);
         Arena {
             nodes: HashMap::new(),
             edges: HashMap::new(),
-            costs: HashMap::new(),
+            costs: costs,
             processed: Vec::new(),
+            start: start,
+            end: end,
         }
     }
 
@@ -45,6 +52,35 @@ impl<'a> Arena<'a> {
             .map(|(_, edge)| edge.end_node)
             .collect()
     }
+
+    fn mark_node_processed(&mut self, node: &'a Node) {
+        self.processed.push(node);
+    }
+
+    fn find_lowest_cost_node(&self) -> Option<&Node> {
+        let result = self
+            .nodes
+            .iter()
+            .filter(|(_, node)| !self.processed.contains(node))
+            .map(|(_, node)| *node)
+            .fold(None, |Some((min_cost_node, min_cost)), node| {
+                match self.costs.get(&node.id) {
+                    Some(cost) => {
+                        if cost < min_cost {
+                            Some((node, cost))
+                        } else {
+                            Some((min_cost_node, min_cost))
+                        }
+                    }
+                    None => Some((node, &std::u64::MAX)),
+                }
+            });
+
+        match result {
+            Some((node, _)) => Some(node),
+            None => None,
+        }
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -59,13 +95,6 @@ impl Node {
         }
     }
 }
-
-// impl FromIterator<Node> for Node {
-//     from_iter<I: IntoIterator<Item=Node>>(iter: I) -> Self {
-//         let mut c = vec![];
-//         iter.
-//     }
-// }
 
 #[derive(Debug)]
 struct Edge<'a> {
@@ -86,34 +115,34 @@ impl<'a> Edge<'a> {
     }
 }
 
-fn main() {
-    let book = Node::new();
-    let poster = Node::new();
-    let lp = Node::new();
-    let drums = Node::new();
-    let bassguitar = Node::new();
-    let piano = Node::new();
-    let start_poster = Edge::new(0, &book, &poster);
-    let book_lp = Edge::new(5, &book, &lp);
-    let poster_bassguitar = Edge::new(30, &poster, &bassguitar);
-    let lp_drums = Edge::new(20, &lp, &drums);
-    let bassguitar_piano = Edge::new(20, &bassguitar, &piano);
-    let drums_piano = Edge::new(10, &drums, &piano);
+// fn main() {
+//     let book = Node::new();
+//     let poster = Node::new();
+//     let lp = Node::new();
+//     let drums = Node::new();
+//     let bassguitar = Node::new();
+//     let piano = Node::new();
+//     let start_poster = Edge::new(0, &book, &poster);
+//     let book_lp = Edge::new(5, &book, &lp);
+//     let poster_bassguitar = Edge::new(30, &poster, &bassguitar);
+//     let lp_drums = Edge::new(20, &lp, &drums);
+//     let bassguitar_piano = Edge::new(20, &bassguitar, &piano);
+//     let drums_piano = Edge::new(10, &drums, &piano);
 
-    let nodes = [&book, &poster, &lp, &drums, &bassguitar, &piano];
-    let edges = [
-        &start_poster,
-        &book_lp,
-        &poster_bassguitar,
-        &lp_drums,
-        &bassguitar_piano,
-        &drums_piano,
-    ];
+//     let nodes = [&book, &poster, &lp, &drums, &bassguitar, &piano];
+//     let edges = [
+//         &start_poster,
+//         &book_lp,
+//         &poster_bassguitar,
+//         &lp_drums,
+//         &bassguitar_piano,
+//         &drums_piano,
+//     ];
 
-    let arena = Arena::new().add_nodes(&nodes).add_edges(&edges);
+//     let arena = Arena::new().add_nodes(&nodes).add_edges(&edges);
 
-    println!("{:?}", arena);
-}
+//     println!("{:?}", arena);
+// }
 
 #[cfg(test)]
 mod tests {
@@ -133,10 +162,41 @@ mod tests {
         let four_not = Edge::new(0, &four, &not_a_neighbor);
         let nodes = [&one, &two, &three, &four, &not_a_neighbor];
         let edges = [&start_one, &start_two, &start_three, &start_four, &four_not];
-        let arena = Arena::new().add_nodes(&nodes).add_edges(&edges);
+        let arena = Arena::new(&start, &four)
+            .add_nodes(&nodes)
+            .add_edges(&edges);
         let neighbors = arena.find_neighbors(&start);
         assert_eq!(neighbors.len(), 4);
         assert_eq!(arena.find_neighbors(&four).len(), 1);
         assert_eq!(arena.find_neighbors(&two).len(), 0);
+    }
+
+    #[test]
+    fn mark_node_processed_test() {
+        let start = Node::new();
+        let mut arena = Arena::new(&start, &start);
+        arena.mark_node_processed(&start);
+        assert_eq!(arena.processed, vec![&start])
+    }
+
+    #[test]
+    fn find_lowest_cost_node_test() {
+        let start = Node::new();
+        let one = Node::new();
+        let two = Node::new();
+        let three = Node::new();
+        let four = Node::new();
+        let not_a_neighbor = Node::new();
+        let start_one = Edge::new(0, &start, &one);
+        let start_two = Edge::new(0, &start, &two);
+        let start_three = Edge::new(0, &start, &three);
+        let start_four = Edge::new(0, &start, &four);
+        let four_not = Edge::new(0, &four, &not_a_neighbor);
+        let nodes = [&one, &two, &three, &four, &not_a_neighbor];
+        let edges = [&start_one, &start_two, &start_three, &start_four, &four_not];
+        let arena = Arena::new(&start, &not_a_neighbor)
+            .add_nodes(&nodes)
+            .add_edges(&edges);
+        println!("{:?}", arena.find_lowest_cost_node())
     }
 }

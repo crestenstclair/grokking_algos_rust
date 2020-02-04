@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 #[derive(Debug)]
 struct Arena<'a> {
+    parents: HashMap<&'a String, &'a String>,
     nodes: HashMap<&'a String, &'a Node>,
     edges: HashMap<&'a String, &'a Edge<'a>>,
     costs: HashMap<&'a String, u64>,
@@ -18,6 +19,7 @@ impl<'a> Arena<'a> {
         costs.insert(&start.id, 0);
         costs.insert(&end.id, std::u64::MAX);
         Arena {
+            parents: HashMap::new(),
             nodes: HashMap::new(),
             edges: HashMap::new(),
             costs: costs,
@@ -45,7 +47,7 @@ impl<'a> Arena<'a> {
         edges.iter().fold(self, |acc, node| acc.add_edge(node))
     }
 
-    fn find_neighbors(&self, node: &Node) -> Vec<&Node> {
+    fn find_neighbors(&self, node: &Node) -> Vec<&'a Node> {
         self.edges
             .iter()
             .filter(|(_, edge)| edge.start_node == node)
@@ -57,29 +59,57 @@ impl<'a> Arena<'a> {
         self.processed.push(node);
     }
 
-    fn find_lowest_cost_node(&self) -> Option<&Node> {
-        let result = self
-            .nodes
+    fn get_cost(&self, node: &Node) -> &u64 {
+        match self.costs.get(&node.id) {
+            Some(cost) => cost,
+            None => &std::u64::MAX,
+        }
+    }
+
+    fn get_weight(&self, node_one: &Node, node_two: &Node) -> u64 {
+        self.edges
             .iter()
-            .filter(|(_, node)| !self.processed.contains(node))
+            .map(|(_, edge)| edge)
+            .find(|current_edge| {
+                current_edge.start_node == node_one && current_edge.end_node == node_two
+            })
+            .unwrap()
+            .weight
+    }
+
+    fn find_lowest_cost_node(&self) -> Option<&'a Node> {
+        self.nodes
+            .iter()
             .map(|(_, node)| *node)
-            .fold(None, |Some((min_cost_node, min_cost)), node| {
-                match self.costs.get(&node.id) {
-                    Some(cost) => {
-                        if cost < min_cost {
-                            Some((node, cost))
-                        } else {
-                            Some((min_cost_node, min_cost))
-                        }
-                    }
-                    None => Some((node, &std::u64::MAX)),
+            .filter(|node| !self.processed.contains(node))
+            .min_by(|node_one, node_two| {
+                let node_one_cost = self.get_cost(node_one);
+                let node_two_cost = self.get_cost(node_two);
+
+                node_one_cost.cmp(node_two_cost)
+            })
+    }
+
+    fn djikstra(mut self) {
+        let node = self.find_lowest_cost_node().unwrap();
+        let mut done = false;
+
+        while !done {
+            let cost = self.get_cost(node);
+            self.find_neighbors(&node).iter().for_each(|neighbor| {
+                let neighbor_cost = self.get_weight(&node, &neighbor);
+                let new_cost = cost + neighbor_cost;
+                if self.get_cost(neighbor) > &new_cost {
+                    self.costs.insert(&neighbor.id, new_cost);
+                    self.parents.insert(&neighbor.id, &node.id);
                 }
             });
 
-        match result {
-            Some((node, _)) => Some(node),
-            None => None,
+            //self.processed.push(node);
+            done = true;
         }
+        println!("Costs: {:?}", self.costs);
+        // vec![&node]
     }
 }
 
@@ -114,35 +144,6 @@ impl<'a> Edge<'a> {
         }
     }
 }
-
-// fn main() {
-//     let book = Node::new();
-//     let poster = Node::new();
-//     let lp = Node::new();
-//     let drums = Node::new();
-//     let bassguitar = Node::new();
-//     let piano = Node::new();
-//     let start_poster = Edge::new(0, &book, &poster);
-//     let book_lp = Edge::new(5, &book, &lp);
-//     let poster_bassguitar = Edge::new(30, &poster, &bassguitar);
-//     let lp_drums = Edge::new(20, &lp, &drums);
-//     let bassguitar_piano = Edge::new(20, &bassguitar, &piano);
-//     let drums_piano = Edge::new(10, &drums, &piano);
-
-//     let nodes = [&book, &poster, &lp, &drums, &bassguitar, &piano];
-//     let edges = [
-//         &start_poster,
-//         &book_lp,
-//         &poster_bassguitar,
-//         &lp_drums,
-//         &bassguitar_piano,
-//         &drums_piano,
-//     ];
-
-//     let arena = Arena::new().add_nodes(&nodes).add_edges(&edges);
-
-//     println!("{:?}", arena);
-// }
 
 #[cfg(test)]
 mod tests {
@@ -192,11 +193,43 @@ mod tests {
         let start_three = Edge::new(0, &start, &three);
         let start_four = Edge::new(0, &start, &four);
         let four_not = Edge::new(0, &four, &not_a_neighbor);
-        let nodes = [&one, &two, &three, &four, &not_a_neighbor];
+        let nodes = [&start, &one, &two, &three, &four, &not_a_neighbor];
         let edges = [&start_one, &start_two, &start_three, &start_four, &four_not];
         let arena = Arena::new(&start, &not_a_neighbor)
             .add_nodes(&nodes)
             .add_edges(&edges);
-        println!("{:?}", arena.find_lowest_cost_node())
+        assert_eq!(arena.find_lowest_cost_node().unwrap(), &start);
+    }
+
+    #[test]
+    fn djikstra_test() {
+        let book = Node::new();
+        let poster = Node::new();
+        let lp = Node::new();
+        let drums = Node::new();
+        let bassguitar = Node::new();
+        let piano = Node::new();
+        let start_poster = Edge::new(0, &book, &poster);
+        let book_lp = Edge::new(5, &book, &lp);
+        let poster_bassguitar = Edge::new(30, &poster, &bassguitar);
+        let lp_drums = Edge::new(20, &lp, &drums);
+        let bassguitar_piano = Edge::new(20, &bassguitar, &piano);
+        let drums_piano = Edge::new(10, &drums, &piano);
+
+        let nodes = [&book, &poster, &lp, &drums, &bassguitar, &piano];
+        let edges = [
+            &start_poster,
+            &book_lp,
+            &poster_bassguitar,
+            &lp_drums,
+            &bassguitar_piano,
+            &drums_piano,
+        ];
+
+        let arena = Arena::new(&poster, &piano)
+            .add_nodes(&nodes)
+            .add_edges(&edges);
+
+        println!("{:?}", arena.djikstra());
     }
 }

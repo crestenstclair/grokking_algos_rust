@@ -115,10 +115,8 @@ impl<'a> Arena<'a> {
             optional = self.parents.get(path.last().unwrap());
         }
 
-        path.reverse();
-
-        println!("path: {:?}", path);
-        path.join(" -> ")
+        path.iter()
+            .fold(String::new(), |acc, node| format!("{} -> {}", node, acc))
     }
 }
 
@@ -246,6 +244,6 @@ mod tests {
             .add_nodes(&nodes)
             .add_edges(&edges);
 
-        assert_eq!("", arena.djikstra())
+        assert_eq!("book -> lp -> drums -> piano -> ", arena.djikstra())
     }
 }

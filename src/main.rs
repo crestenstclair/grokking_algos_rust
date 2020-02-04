@@ -90,7 +90,7 @@ impl<'a> Arena<'a> {
             })
     }
 
-    fn djikstra(mut self) -> String {
+    fn dijkstra(mut self) -> String {
         let mut optional = self.find_lowest_cost_node();
         while let Some(node) = optional {
             self.find_neighbors(&node).iter().for_each(|neighbor| {
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test]
-    fn djikstra_test() {
+    fn dijkstra_test() {
         let book = Node::new_with_id("book".to_string());
         let poster = Node::new_with_id("poster".to_string());
         let lp = Node::new_with_id("lp".to_string());
@@ -244,6 +244,6 @@ mod tests {
             .add_nodes(&nodes)
             .add_edges(&edges);
 
-        assert_eq!("book -> lp -> drums -> piano -> ", arena.djikstra())
+        assert_eq!("book -> lp -> drums -> piano -> ", arena.dijkstra())
     }
 }
